@@ -69,6 +69,17 @@ Configure the dedicated French Radarr and Sonarr instances as defaults for
 the secondary category. Internally this remains `is4k`: request history,
 permissions, API fields, and database records stay compatible.
 
+For titles whose TMDB original language is `fr`, the UI hides new dubbed
+requests, including the series "request more" action. Existing request
+management remains available. Dubbed collection requests exclude those
+films from the list and selection; standard requests remain unchanged.
+Unknown original languages retain the dubbed option. This is UI guidance
+only: direct API requests are not restricted or redirected.
+
+The UI behavior is maintained in `docker-french-dub/french-original-ui.patch`,
+applied before relabeling. If an upstream update makes the patch incompatible,
+the build stops so it can be reviewed.
+
 This does not add audio-language detection or independent editions.
 Media-server scanning still follows upstream resolution rules, which can
 conflict with using the secondary category for dubbed content.

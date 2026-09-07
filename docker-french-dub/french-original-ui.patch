@@ -1,0 +1,115 @@
+diff --git a/src/components/CollectionDetails/index.tsx b/src/components/CollectionDetails/index.tsx
+index a8ee90a..6e6b7a7 100644
+--- a/src/components/CollectionDetails/index.tsx
++++ b/src/components/CollectionDetails/index.tsx
+@@ -228,9 +228,10 @@ const CollectionDetails = ({ collection }: CollectionDetailsProps) => {
+     }) &&
+     data.parts.filter(
+       (part) =>
+-        !part.mediaInfo ||
+-        part.mediaInfo.status4k === MediaStatus.DELETED ||
+-        part.mediaInfo.status4k === MediaStatus.UNKNOWN
++        part.originalLanguage !== 'fr' &&
++        (!part.mediaInfo ||
++          part.mediaInfo.status4k === MediaStatus.DELETED ||
++          part.mediaInfo.status4k === MediaStatus.UNKNOWN)
+     ).length > 0;
+
+   const blocklistVisibility = hasPermission(
+diff --git a/src/components/MovieDetails/index.tsx b/src/components/MovieDetails/index.tsx
+index 80aded5..11198ea 100644
+--- a/src/components/MovieDetails/index.tsx
++++ b/src/components/MovieDetails/index.tsx
+@@ -624,6 +624,7 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
+             <PlayButton links={mediaLinks} />
+           </div>
+           <RequestButton
++            originalLanguage={data.originalLanguage}
+             mediaType="movie"
+             media={data.mediaInfo}
+             tmdbId={data.id}
+diff --git a/src/components/RequestButton/index.tsx b/src/components/RequestButton/index.tsx
+index 55b14c6..5d07678 100644
+--- a/src/components/RequestButton/index.tsx
++++ b/src/components/RequestButton/index.tsx
+@@ -46,6 +46,7 @@ interface ButtonOption {
+
+ interface RequestButtonProps {
+   mediaType: 'movie' | 'tv';
++  originalLanguage: string;
+   onUpdate: () => void;
+   tmdbId: number;
+   media?: Media;
+@@ -58,6 +59,7 @@ const RequestButton = ({
+   onUpdate,
+   media,
+   mediaType,
++  originalLanguage,
+   isShowComplete = false,
+   is4kShowComplete = false,
+ }: RequestButtonProps) => {
+@@ -314,6 +316,7 @@ const RequestButton = ({
+
+   // 4K request button
+   if (
++    originalLanguage !== 'fr' &&
+     (!media ||
+       media.status4k === MediaStatus.UNKNOWN ||
+       (media.status4k === MediaStatus.DELETED && !active4kRequest)) &&
+@@ -339,6 +342,7 @@ const RequestButton = ({
+       svg: <ArrowDownTrayIcon />,
+     });
+   } else if (
++    originalLanguage !== 'fr' &&
+     mediaType === 'tv' &&
+     (!active4kRequest || active4kRequest.requestedBy.id !== user?.id) &&
+     hasPermission([Permission.REQUEST_4K, Permission.REQUEST_4K_TV], {
+diff --git a/src/components/RequestModal/CollectionRequestModal.tsx b/src/components/RequestModal/CollectionRequestModal.tsx
+index f704b09..7c85d28 100644
+--- a/src/components/RequestModal/CollectionRequestModal.tsx
++++ b/src/components/RequestModal/CollectionRequestModal.tsx
+@@ -15,7 +15,7 @@ import type { QuotaResponse } from '@server/interfaces/api/userInterfaces';
+ import { Permission } from '@server/lib/permissions';
+ import type { Collection } from '@server/models/Collection';
+ import axios from 'axios';
+-import { useCallback, useEffect, useState } from 'react';
++import { useCallback, useEffect, useMemo, useState } from 'react';
+ import { useIntl } from 'react-intl';
+ import useSWR, { mutate } from 'swr';
+
+@@ -51,9 +51,20 @@ const CollectionRequestModal = ({
+     useState<RequestOverrides | null>(null);
+   const [selectedParts, setSelectedParts] = useState<number[]>([]);
+   const { addToast } = useToasts();
+-  const { data, error } = useSWR<Collection>(`/api/v1/collection/${tmdbId}`, {
+-    revalidateOnMount: true,
+-  });
++  const { data: collection, error } = useSWR<Collection>(
++    `/api/v1/collection/${tmdbId}`,
++    { revalidateOnMount: true }
++  );
++  const data = useMemo(
++    () =>
++      collection && {
++        ...collection,
++        parts: collection.parts.filter(
++          (part) => !is4k || part.originalLanguage !== 'fr'
++        ),
++      },
++    [collection, is4k]
++  );
+   const intl = useIntl();
+   const { user, hasPermission } = useUser();
+   const { data: quota } = useSWR<QuotaResponse>(
+diff --git a/src/components/TvDetails/index.tsx b/src/components/TvDetails/index.tsx
+index 3a905db..d7249fc 100644
+--- a/src/components/TvDetails/index.tsx
++++ b/src/components/TvDetails/index.tsx
+@@ -668,6 +668,7 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
+             <PlayButton links={mediaLinks} />
+           </div>
+           <RequestButton
++            originalLanguage={data.originalLanguage}
+             mediaType="tv"
+             onUpdate={() => revalidate()}
+             tmdbId={data?.id}

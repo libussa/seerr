@@ -19,6 +19,8 @@ if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   exit 1
 fi
 image_tag=${1:-seerr-french-dub:$version}
+git -C "$build_dir" apply --check "$overlay_dir/french-original-ui.patch"
+git -C "$build_dir" apply "$overlay_dir/french-original-ui.patch"
 python3 "$overlay_dir/relabel.py" "$build_dir"
 source_epoch=$(git -C "$build_dir" show -s --format=%ct HEAD)
 docker build --progress=plain \
