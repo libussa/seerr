@@ -2,6 +2,7 @@ name: French-dub upstream release PR
 
 on:
   schedule:
+    # Daily at 06:23 UTC; offset from the busiest start-of-hour period.
     - cron: '23 6 * * *'
   workflow_dispatch:
     inputs:
