@@ -20,6 +20,7 @@ on:
       - .github/workflows/cypress.yml
       - .github/workflows/codeql.yml
       - .github/actions/apply-french-dub/**
+      - docker-french-dub/**
 
 permissions: {}
 
