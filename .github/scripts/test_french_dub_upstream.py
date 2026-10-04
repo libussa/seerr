@@ -31,6 +31,7 @@ class ReleaseUpdaterTests(unittest.TestCase):
             "GITHUB_OUTPUT": str(self.output),
             "GITHUB_STEP_SUMMARY": str(self.summary),
             "REVALIDATE": "false",
+            "GITHUB_RUN_ID": "123",
         })
         env.start()
         self.addCleanup(env.stop)
@@ -42,7 +43,7 @@ class ReleaseUpdaterTests(unittest.TestCase):
         self.refs = []
         self.statuses = []
         self.pr = {
-            "number": 1, "state": "open", "head": {"sha": HEAD},
+            "number": 1, "state": "open", "head": {"sha": HEAD, "ref": "automation/french-dub-v3.5.0"},
             "html_url": "https://github.com/libussa/seerr/pull/1",
         }
 
@@ -75,6 +76,8 @@ class ReleaseUpdaterTests(unittest.TestCase):
             return {"object": {"sha": HEAD}}
         if path.endswith("/pulls"):
             return self.pr
+        if "/statuses/" in path:
+            return data
         if path.endswith("/status"):
             return {"statuses": self.statuses}
         self.fail(f"Unexpected API call {path}")
@@ -84,7 +87,7 @@ class ReleaseUpdaterTests(unittest.TestCase):
             updater.main()
 
     def mutations(self):
-        return [(path, data) for path, data in self.calls if data is not None]
+        return [(path, data) for path, data in self.calls if data is not None and "/statuses/" not in path]
 
     def test_new_release_creates_pin_only_pr_and_requests_validation(self):
         self.execute()
@@ -108,7 +111,7 @@ class ReleaseUpdaterTests(unittest.TestCase):
 
     def test_existing_successful_pr_is_not_rebuilt_or_changed(self):
         self.prs = [self.pr]
-        self.statuses = [{"context": updater.STATUS, "state": "success"}]
+        self.statuses = [{"context": name, "state": "success"} for name in updater.VALIDATION_STATUSES]
         self.execute()
         self.assertEqual(self.mutations(), [])
         self.assertNotIn("validate=true", self.output.read_text())
@@ -118,6 +121,15 @@ class ReleaseUpdaterTests(unittest.TestCase):
         self.execute()
         self.assertEqual(self.mutations(), [])
         self.assertNotIn("validate=true", self.output.read_text())
+
+    def test_build_only_success_does_not_skip_new_upstream_checks(self):
+        self.prs = [self.pr]
+        self.statuses = [{"context": updater.STATUS, "state": "success"}]
+        self.execute()
+        self.assertIn("validate=true", self.output.read_text())
+        self.assertIn(f"upstream_sha={NEW}", self.output.read_text())
+        pending = [data['context'] for path, data in self.calls if '/statuses/' in path]
+        self.assertEqual(set(pending), set(updater.VALIDATION_STATUSES))
 
     def test_manual_retry_rebuilds_failed_pr(self):
         self.prs = [self.pr]

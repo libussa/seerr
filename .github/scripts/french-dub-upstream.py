@@ -15,6 +15,7 @@ UPSTREAM = "seerr-team/seerr"
 BASE = "codex/french-dub-labels"
 PIN = "docker-french-dub/upstream-ref"
 STATUS = "seerr/french-dub-build"
+VALIDATION_STATUSES = (STATUS, "seerr/upstream-ci", "seerr/upstream-cypress", "seerr/upstream-codeql")
 
 
 def api(path, data=None, method=None):
@@ -118,7 +119,10 @@ def main():
             f"Release notes: {release['html_url']}\n\n"
             f"Upstream commit: `{upstream}`\n\n"
             "The release checker builds the custom image without publishing it and reports "
-            f"the result as **{STATUS}** on this PR. If the overlay no longer applies, "
+            f"the result as **{STATUS}** on this PR. The fork's upstream CI, Cypress, and CodeQL "
+            "workflows also run against the pinned upstream source with the overlay applied. "
+            "Their results appear as **seerr/upstream-ci**, **seerr/upstream-cypress**, and "
+            "**seerr/upstream-codeql**. If the overlay no longer applies, "
             "the build fails and the patch needs updating before merge.\n\n"
             f"Merging into `{BASE}` triggers the existing image publisher, including `latest`. "
             "Server deployment remains manual.\n\n"
@@ -140,11 +144,23 @@ def main():
     summary(f"Release PR: {pr['html_url']}")
     head = pr["head"]["sha"]
     statuses = api(f"repos/{REPO}/commits/{head}/status")["statuses"]
-    previous = next((item for item in statuses if item["context"] == STATUS), None)
-    if previous and previous["state"] != "pending" and os.environ.get("REVALIDATE") != "true":
-        summary(f"This PR commit was already validated: **{previous['state']}**. Use Run workflow with revalidate to rebuild it.")
+    previous = {item["context"]: item["state"] for item in statuses}
+    if all(previous.get(name) in ("success", "failure", "error") for name in VALIDATION_STATUSES) and os.environ.get("REVALIDATE") != "true":
+        summary("All validation workflows already finished for this commit. Use Run workflow with revalidate to retry them.")
         return
+    pinned = content(REPO, PIN, head).strip()
+    if not re.fullmatch(r"[0-9a-f]{40}", pinned):
+        raise ValueError("PR upstream pin is not a full commit SHA")
+    run_url = f"https://github.com/{REPO}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+    for name in VALIDATION_STATUSES:
+        api(f"repos/{REPO}/statuses/{head}", {
+            "state": "pending", "context": name,
+            "description": "Validating pinned upstream with French overlay",
+            "target_url": run_url,
+        })
     output("sha", head)
+    output("upstream_sha", pinned)
+    output("overlay_ref", f"refs/heads/{pr['head']['ref']}")
     output("validate", "true")
     summary(f"Building PR commit `{head}` and reporting its status on the PR.")
 

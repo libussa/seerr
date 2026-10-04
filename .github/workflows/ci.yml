@@ -3,6 +3,23 @@
 name: Seerr CI
 
 on:
+  workflow_call:
+    inputs:
+      upstream_sha:
+        description: Pinned upstream commit to test
+        type: string
+        required: false
+        default: ''
+      overlay_sha:
+        description: French-dub PR commit whose overlay should be applied
+        type: string
+        required: false
+        default: ''
+      overlay_ref:
+        description: PR branch ref for CodeQL result attribution
+        type: string
+        required: false
+        default: ''
   pull_request:
     branches:
       - '*'
@@ -18,13 +35,13 @@ env:
   DOCKER_HUB: seerr/seerr
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ inputs.overlay_sha || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   i18n:
     name: i18n Check
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || inputs.overlay_sha != ''
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -38,6 +55,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          repository: ${{ inputs.upstream_sha != '' && 'seerr-team/seerr' || github.repository }}
+          ref: ${{ inputs.upstream_sha || github.sha }}
+      - name: Apply the French-dub PR overlay
+        if: inputs.overlay_sha != ''
+        uses: libussa/seerr/.github/actions/apply-french-dub@0c6c9f83407e09e7fa38ca3c9c83a26b698dfd11
+        with:
+          overlay-sha: ${{ inputs.overlay_sha }}
 
       - parallel:
           - name: Pnpm Setup
@@ -68,6 +92,7 @@ jobs:
       - name: i18n Check
         shell: bash
         env:
+          OVERLAY_SHA: ${{ inputs.overlay_sha }}
           I18N_LABEL: i18n-out-of-sync
           BODY: |
             The i18n check failed because translation messages are out of sync.
@@ -78,6 +103,7 @@ jobs:
         run: |
           retry() { n=0; until "$@"; do n=$((n+1)); [ $n -ge 3 ] && break; echo "retry $n: $*" >&2; sleep 2; done; }
           check_failed=0; node bin/check-i18n.js || check_failed=$?
+          if [ -n "$OVERLAY_SHA" ]; then exit "$check_failed"; fi
           pr_labels=$(gh pr view "$NUMBER" -R "$GH_REPO" --json labels -q '.labels[].name' 2>/dev/null) || true
           has_label=0
           while IFS= read -r name; do [ -n "$name" ] && [ "$name" = "$I18N_LABEL" ] && has_label=1 && break; done <<< "$pr_labels"
@@ -89,7 +115,7 @@ jobs:
           exit $check_failed
   test:
     name: Lint & Test Build
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || inputs.overlay_sha != ''
     runs-on: ubuntu-24.04
     container: node:22.22.2-alpine3.23@sha256:8ea2348b068a9544dae7317b4f3aafcdc032df1647bb7d768a05a5cad1a7683f
     steps:
@@ -97,6 +123,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          repository: ${{ inputs.upstream_sha != '' && 'seerr-team/seerr' || github.repository }}
+          ref: ${{ inputs.upstream_sha || github.sha }}
+      - name: Apply the French-dub PR overlay
+        if: inputs.overlay_sha != ''
+        uses: libussa/seerr/.github/actions/apply-french-dub@0c6c9f83407e09e7fa38ca3c9c83a26b698dfd11
+        with:
+          overlay-sha: ${{ inputs.overlay_sha }}
 
       - name: Pnpm Setup
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
@@ -131,7 +164,7 @@ jobs:
 
   unit-test:
     name: Unit Tests
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || inputs.overlay_sha != ''
     runs-on: ubuntu-24.04
     container: node:22.22.2-alpine3.23@sha256:8ea2348b068a9544dae7317b4f3aafcdc032df1647bb7d768a05a5cad1a7683f
     permissions:
@@ -141,6 +174,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          repository: ${{ inputs.upstream_sha != '' && 'seerr-team/seerr' || github.repository }}
+          ref: ${{ inputs.upstream_sha || github.sha }}
+      - name: Apply the French-dub PR overlay
+        if: inputs.overlay_sha != ''
+        uses: libussa/seerr/.github/actions/apply-french-dub@0c6c9f83407e09e7fa38ca3c9c83a26b698dfd11
+        with:
+          overlay-sha: ${{ inputs.overlay_sha }}
 
       - name: Pnpm Setup
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
@@ -176,7 +216,7 @@ jobs:
 
   build:
     name: Build (per-arch, native runners)
-    if: github.ref == 'refs/heads/develop'
+    if: github.repository == 'seerr-team/seerr' && github.ref == 'refs/heads/develop' && inputs.overlay_sha == ''
     strategy:
       matrix:
         include:
@@ -286,7 +326,7 @@ jobs:
   discord:
     name: Send Discord Notification
     needs: publish
-    if: always() && github.event_name != 'pull_request'
+    if: always() && github.repository == 'seerr-team/seerr' && github.event_name != 'pull_request' && inputs.overlay_sha == ''
     runs-on: ubuntu-24.04
     steps:
       - name: Determine Workflow Status
