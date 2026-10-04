@@ -46,5 +46,8 @@ jobs:
           docker tag "$IMAGE" "$version_image"
           docker push "$IMAGE"
           docker push "$version_image"
+          docker tag "$IMAGE" ghcr.io/libussa/seerr-french-dub:latest
+          docker push ghcr.io/libussa/seerr-french-dub:latest
+          echo "Latest tag: ghcr.io/libussa/seerr-french-dub:latest" >> "$GITHUB_STEP_SUMMARY"
           echo "Image: \`$IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
           echo "Version tag: \`$version_image\`" >> "$GITHUB_STEP_SUMMARY"
