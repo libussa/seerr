@@ -26,22 +26,33 @@ runs:
         import subprocess
         import tempfile
 
+        def command(*args):
+            try:
+                return subprocess.check_output(args, text=True, stderr=subprocess.STDOUT).strip()
+            except subprocess.CalledProcessError as error:
+                message = (error.output or str(error)).replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+                print(f'::error::{message}', flush=True)
+                raise
+
         sha = os.environ['OVERLAY_SHA']
         if not re.fullmatch(r'[0-9a-f]{40}', sha):
             raise SystemExit('Expected a full overlay commit SHA')
         with tempfile.TemporaryDirectory(prefix='french-dub-overlay-') as directory:
             def git(*args):
-                return subprocess.check_output(['git', '-C', directory, *args], text=True).strip()
+                return command('git', '-C', directory, *args)
             git('init', '-q')
             git('fetch', '--depth=1', 'https://github.com/libussa/seerr.git', sha)
             git('checkout', 'FETCH_HEAD', '--', 'docker-french-dub')
             overlay = Path(directory) / 'docker-french-dub'
-            upstream = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+            # Container jobs can run as a different UID than actions/checkout.
+            source_git = ['git', '-c', f'safe.directory={os.getcwd()}']
+            upstream = command(*source_git, 'rev-parse', 'HEAD')
             if (overlay / 'upstream-ref').read_text().strip() != upstream:
+                print(f'::error::Checked out {upstream}, but PR pins {(overlay / "upstream-ref").read_text().strip()}', flush=True)
                 raise SystemExit('Checked-out upstream does not match the PR pin')
             patch = str(overlay / 'french-original-ui.patch')
-            subprocess.run(['git', 'apply', '--check', patch], check=True)
-            subprocess.run(['git', 'apply', patch], check=True)
+            command(*source_git, 'apply', '--check', patch)
+            command(*source_git, 'apply', patch)
             subprocess.run(['python3', str(overlay / 'relabel.py'), os.getcwd()], check=True)
-            subprocess.run(['git', 'diff', '--stat'], check=True)
+            print(command(*source_git, 'diff', '--stat'))
         PY
