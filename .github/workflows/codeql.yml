@@ -3,6 +3,23 @@
 name: 'CodeQL'
 
 on:
+  workflow_call:
+    inputs:
+      upstream_sha:
+        description: Pinned upstream commit to test
+        type: string
+        required: false
+        default: ''
+      overlay_sha:
+        description: French-dub PR commit whose overlay should be applied
+        type: string
+        required: false
+        default: ''
+      overlay_ref:
+        description: PR branch ref for CodeQL result attribution
+        type: string
+        required: false
+        default: ''
   push:
     branches: ['develop']
     paths-ignore:
@@ -20,7 +37,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ inputs.overlay_sha || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -36,17 +53,23 @@ jobs:
       matrix:
         language: [actions, javascript]
     steps:
-      - parallel:
-          - name: Checkout
-            uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-            with:
-              persist-credentials: false
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          repository: ${{ inputs.upstream_sha != '' && 'seerr-team/seerr' || github.repository }}
+          ref: ${{ inputs.upstream_sha || github.sha }}
+      - name: Apply the French-dub PR overlay
+        if: inputs.overlay_sha != ''
+        uses: libussa/seerr/.github/actions/apply-french-dub@0c6c9f83407e09e7fa38ca3c9c83a26b698dfd11
+        with:
+          overlay-sha: ${{ inputs.overlay_sha }}
 
-          - name: Initialize CodeQL
-            uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
-            with:
-              languages: ${{ matrix.language }}
-              queries: +security-and-quality
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          languages: ${{ matrix.language }}
+          queries: +security-and-quality
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
@@ -55,3 +78,5 @@ jobs:
         uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           category: '/language:${{ matrix.language }}'
+          ref: ${{ inputs.overlay_ref || github.ref }}
+          sha: ${{ inputs.overlay_sha || github.sha }}

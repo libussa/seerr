@@ -3,6 +3,23 @@
 name: Cypress Tests
 
 on:
+  workflow_call:
+    inputs:
+      upstream_sha:
+        description: Pinned upstream commit to test
+        type: string
+        required: false
+        default: ''
+      overlay_sha:
+        description: French-dub PR commit whose overlay should be applied
+        type: string
+        required: false
+        default: ''
+      overlay_ref:
+        description: PR branch ref for CodeQL result attribution
+        type: string
+        required: false
+        default: ''
   pull_request:
     branches: ['*']
     paths:
@@ -28,7 +45,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ inputs.overlay_sha || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -40,6 +57,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          repository: ${{ inputs.upstream_sha != '' && 'seerr-team/seerr' || github.repository }}
+          ref: ${{ inputs.upstream_sha || github.sha }}
+      - name: Apply the French-dub PR overlay
+        if: inputs.overlay_sha != ''
+        uses: libussa/seerr/.github/actions/apply-french-dub@0c6c9f83407e09e7fa38ca3c9c83a26b698dfd11
+        with:
+          overlay-sha: ${{ inputs.overlay_sha }}
       - parallel:
           - name: Set up Node.js
             uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -73,11 +97,11 @@ jobs:
           build: pnpm cypress:build
           start: pnpm start
           wait-on: 'http://localhost:5055'
-          record: true
+          record: ${{ github.repository == 'seerr-team/seerr' }}
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           WITH_MIGRATIONS: true
           # Fix test titles in cypress dashboard
           COMMIT_INFO_MESSAGE: ${{github.event.pull_request.title}}
-          COMMIT_INFO_SHA: ${{github.event.pull_request.head.sha}}
+          COMMIT_INFO_SHA: ${{ inputs.overlay_sha || github.event.pull_request.head.sha }}

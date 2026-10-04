@@ -1,0 +1,169 @@
+name: French-dub upstream release PR
+
+on:
+  schedule:
+    # Daily at 06:23 UTC; offset from the busiest start-of-hour period.
+    - cron: '23 6 * * *'
+  workflow_dispatch:
+    inputs:
+      revalidate:
+        description: Rebuild an existing release PR, including a previously failed build
+        type: boolean
+        default: false
+  push:
+    branches: [develop]
+    paths:
+      - .github/workflows/french-dub-upstream.yml
+      - .github/scripts/french-dub-upstream.py
+      - .github/scripts/test_french_dub_upstream.py
+      - .github/workflows/ci.yml
+      - .github/workflows/cypress.yml
+      - .github/workflows/codeql.yml
+      - .github/actions/apply-french-dub/**
+
+permissions: {}
+
+concurrency:
+  group: french-dub-upstream-release
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.repository == 'libussa/seerr' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      statuses: write
+    outputs:
+      sha: ${{ steps.release.outputs.sha }}
+      validate: ${{ steps.release.outputs.validate }}
+      upstream_sha: ${{ steps.release.outputs.upstream_sha }}
+      overlay_ref: ${{ steps.release.outputs.overlay_ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test release selection and PR handling
+        run: python3 -m unittest discover -s .github/scripts -p 'test_french_dub_upstream.py' -v
+      - name: Open a PR for the latest stable release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVALIDATE: ${{ inputs.revalidate || github.event_name == 'push' }}
+        run: python3 .github/scripts/french-dub-upstream.py
+
+  validate:
+    needs: update
+    if: needs.update.outputs.validate == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      statuses: write
+    env:
+      CANDIDATE_SHA: ${{ needs.update.outputs.sha }}
+      STATUS_CONTEXT: seerr/french-dub-build
+    steps:
+      - name: Mark the PR build as pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$CANDIDATE_SHA" \
+            -f state=pending -f context="$STATUS_CONTEXT" \
+            -f description='Building the custom image without publishing' \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.update.outputs.sha }}
+          persist-credentials: false
+      - name: Build the proposed upstream release with the French overlay
+        run: ./docker-french-dub/build.sh "seerr-french-dub:pr-$CANDIDATE_SHA"
+      - name: Report the build result on the PR commit
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RESULT: ${{ job.status }}
+        run: |
+          state=failure
+          if [ "$BUILD_RESULT" = success ]; then state=success; fi
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$CANDIDATE_SHA" \
+            -f state="$state" -f context="$STATUS_CONTEXT" \
+            -f description="Custom image build: $BUILD_RESULT" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+  upstream-ci:
+    needs: update
+    if: needs.update.outputs.validate == 'true'
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/ci.yml
+    with:
+      upstream_sha: ${{ needs.update.outputs.upstream_sha }}
+      overlay_sha: ${{ needs.update.outputs.sha }}
+      overlay_ref: ${{ needs.update.outputs.overlay_ref }}
+
+  upstream-cypress:
+    needs: update
+    if: needs.update.outputs.validate == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/cypress.yml
+    with:
+      upstream_sha: ${{ needs.update.outputs.upstream_sha }}
+      overlay_sha: ${{ needs.update.outputs.sha }}
+      overlay_ref: ${{ needs.update.outputs.overlay_ref }}
+
+  upstream-codeql:
+    needs: update
+    if: needs.update.outputs.validate == 'true'
+    permissions:
+      contents: read
+      security-events: write
+    uses: ./.github/workflows/codeql.yml
+    with:
+      upstream_sha: ${{ needs.update.outputs.upstream_sha }}
+      overlay_sha: ${{ needs.update.outputs.sha }}
+      overlay_ref: ${{ needs.update.outputs.overlay_ref }}
+
+  report-upstream:
+    needs: [update, upstream-ci, upstream-cypress, upstream-codeql]
+    if: always() && needs.update.outputs.validate == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Attach upstream workflow results to the release PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ needs.update.outputs.sha }}
+          CI_RESULT: ${{ needs.upstream-ci.result }}
+          CYPRESS_RESULT: ${{ needs.upstream-cypress.result }}
+          CODEQL_RESULT: ${{ needs.upstream-codeql.result }}
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          import os
+          spec = importlib.util.spec_from_file_location('updater', '.github/scripts/french-dub-upstream.py')
+          updater = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(updater)
+          url = f"https://github.com/{updater.REPO}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          for name in ('ci', 'cypress', 'codeql'):
+              result = os.environ[f'{name.upper()}_RESULT']
+              updater.api(f"repos/{updater.REPO}/statuses/{os.environ['CANDIDATE_SHA']}", {
+                  'state': 'success' if result == 'success' else 'failure',
+                  'context': f'seerr/upstream-{name}',
+                  'description': f'Upstream {name} workflow: {result}',
+                  'target_url': url,
+              })
+              updater.summary(f'Upstream {name}: **{result}** ([workflow run]({url})).')
+          PY
