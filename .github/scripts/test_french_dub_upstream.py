@@ -45,6 +45,7 @@ class ReleaseUpdaterTests(unittest.TestCase):
         self.pr = {
             "number": 1, "state": "open", "head": {"sha": HEAD, "ref": "automation/french-dub-v3.5.0"},
             "html_url": "https://github.com/libussa/seerr/pull/1",
+            "body": updater.with_upstream_comparison("PR description", OLD, NEW),
         }
 
     def api(self, path, data=None, method=None):
@@ -75,6 +76,9 @@ class ReleaseUpdaterTests(unittest.TestCase):
         if path.endswith("/git/refs"):
             return {"object": {"sha": HEAD}}
         if path.endswith("/pulls"):
+            return self.pr
+        if path.endswith("/pulls/1"):
+            self.pr.update(data)
             return self.pr
         if "/statuses/" in path:
             return data
@@ -156,6 +160,17 @@ class ReleaseUpdaterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.execute()
         self.assertEqual(self.mutations(), [])
+
+    def test_existing_pr_gets_comparison_without_losing_user_notes(self):
+        self.pr['body'] = 'Keep these reviewer notes.'
+        self.prs = [self.pr]
+        self.execute()
+        self.assertIn('Keep these reviewer notes.', self.pr['body'])
+        self.assertIn(f'/compare/{OLD}...{NEW}', self.pr['body'])
+
+    def test_comparison_block_is_idempotent(self):
+        body = updater.with_upstream_comparison('User notes', OLD, NEW)
+        self.assertEqual(body, updater.with_upstream_comparison(body, OLD, NEW))
 
 
 if __name__ == "__main__":

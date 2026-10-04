@@ -18,6 +18,22 @@ STATUS = "seerr/french-dub-build"
 VALIDATION_STATUSES = (STATUS, "seerr/upstream-ci", "seerr/upstream-cypress", "seerr/upstream-codeql")
 
 
+def with_upstream_comparison(body, previous, target):
+    block = (
+        "<!-- seerr-upstream-comparison:start -->\n"
+        f"Upstream changes: [compare the previous and proposed releases]"
+        f"(https://github.com/{UPSTREAM}/compare/{previous}...{target}).\n\n"
+        "This PR updates the upstream commit pin. The image build and CI fetch that "
+        "release's complete source and apply the French-dub overlay; upstream application "
+        "commits are not merged into this fork.\n"
+        "<!-- seerr-upstream-comparison:end -->"
+    )
+    pattern = r"<!-- seerr-upstream-comparison:start -->.*?<!-- seerr-upstream-comparison:end -->"
+    if re.search(pattern, body, flags=re.DOTALL):
+        return re.sub(pattern, lambda match: block, body, flags=re.DOTALL)
+    return body.rstrip() + "\n\n" + block
+
+
 def api(path, data=None, method=None):
     print(f"{method or ('POST' if data is not None else 'GET')} {path}", flush=True)
     request = urllib.request.Request(
@@ -113,7 +129,7 @@ def main():
             head = commit["sha"]
             api(f"repos/{REPO}/git/refs", {"ref": f"refs/heads/{branch}", "sha": head})
 
-        body = (
+        body = with_upstream_comparison((
             f"Updates the pinned upstream Seerr release from {current_package['version']} to **{tag}**, "
             "preserving the French-dub overlay.\n\n"
             f"Release notes: {release['html_url']}\n\n"
@@ -127,7 +143,7 @@ def main():
             f"Merging into `{BASE}` triggers the existing image publisher, including `latest`. "
             "Server deployment remains manual.\n\n"
             "This PR is not auto-merged. Closing it declines this release; the checker will not reopen it."
-        )
+        ), current, upstream)
         try:
             pr = api(f"repos/{REPO}/pulls", {
                 "title": f"Update French-dub image to Seerr {tag}",
@@ -143,14 +159,18 @@ def main():
 
     summary(f"Release PR: {pr['html_url']}")
     head = pr["head"]["sha"]
+    pinned = content(REPO, PIN, head).strip()
+    if not re.fullmatch(r"[0-9a-f]{40}", pinned):
+        raise ValueError("PR upstream pin is not a full commit SHA")
+    old_body = pr.get("body") or ""
+    new_body = with_upstream_comparison(old_body, current, pinned)
+    if new_body != old_body:
+        api(f"repos/{REPO}/pulls/{pr['number']}", {"body": new_body}, method="PATCH")
     statuses = api(f"repos/{REPO}/commits/{head}/status")["statuses"]
     previous = {item["context"]: item["state"] for item in statuses}
     if all(previous.get(name) in ("success", "failure", "error") for name in VALIDATION_STATUSES) and os.environ.get("REVALIDATE") != "true":
         summary("All validation workflows already finished for this commit. Use Run workflow with revalidate to retry them.")
         return
-    pinned = content(REPO, PIN, head).strip()
-    if not re.fullmatch(r"[0-9a-f]{40}", pinned):
-        raise ValueError("PR upstream pin is not a full commit SHA")
     run_url = f"https://github.com/{REPO}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
     for name in VALIDATION_STATUSES:
         api(f"repos/{REPO}/statuses/{head}", {

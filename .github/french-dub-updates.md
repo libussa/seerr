@@ -1,13 +1,15 @@
 # French-dub release updates
 
 The `French-dub upstream release PR` workflow runs on the fork's default branch,
-`develop`, daily at 06:23 UTC. GitHub may delay scheduled runs. A fork cannot
+`codex/french-dub-labels`, daily at 06:23 UTC. GitHub may delay scheduled runs. A fork cannot
 subscribe directly to another repository's release event, so the workflow polls
 the latest stable release of `seerr-team/seerr`. It can also be run from Actions.
 
 When a newer stable release is available, it opens a PR against
 `codex/french-dub-labels` changing only `docker-french-dub/upstream-ref`. The
 release tag is resolved to a full commit SHA and checked against `package.json`.
+Each PR includes release notes and a comparison link between the exact previous
+and proposed upstream commits, including all upstream changes in the new image.
 There is one branch/PR per version. Repeated checks do not create duplicates,
 overwrite contributor edits, downgrade the pin, or reopen a declined PR.
 
@@ -40,4 +42,5 @@ permissions on the built-in `GITHUB_TOKEN` and never approves PRs.
 Keep this workflow on the default branch: GitHub only runs schedules there.
 GitHub can disable schedules in inactive public repositories after 60 days;
 re-enable the workflow in Actions if this happens. If the default branch is
-renamed, update the `push` filter and job guard in the workflow.
+renamed, update the `push` filter and the updater script's target branch. The job
+guard follows the repository's default-branch setting automatically.

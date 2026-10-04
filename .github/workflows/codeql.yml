@@ -37,7 +37,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.overlay_sha || github.event.pull_request.number || github.ref }}
+  group: seerr-codeql-${{ inputs.overlay_sha || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -61,7 +61,7 @@ jobs:
           ref: ${{ inputs.upstream_sha || github.sha }}
       - name: Apply the French-dub PR overlay
         if: inputs.overlay_sha != ''
-        uses: libussa/seerr/.github/actions/apply-french-dub@0c6c9f83407e09e7fa38ca3c9c83a26b698dfd11
+        uses: libussa/seerr/.github/actions/apply-french-dub@f27f43d0552942ba9083e8fecb2a251142c5716f
         with:
           overlay-sha: ${{ inputs.overlay_sha }}
 

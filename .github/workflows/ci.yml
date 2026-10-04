@@ -35,7 +35,7 @@ env:
   DOCKER_HUB: seerr/seerr
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.overlay_sha || github.event.pull_request.number || github.ref }}
+  group: seerr-ci-${{ inputs.overlay_sha || github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -59,7 +59,7 @@ jobs:
           ref: ${{ inputs.upstream_sha || github.sha }}
       - name: Apply the French-dub PR overlay
         if: inputs.overlay_sha != ''
-        uses: libussa/seerr/.github/actions/apply-french-dub@0c6c9f83407e09e7fa38ca3c9c83a26b698dfd11
+        uses: libussa/seerr/.github/actions/apply-french-dub@f27f43d0552942ba9083e8fecb2a251142c5716f
         with:
           overlay-sha: ${{ inputs.overlay_sha }}
 
@@ -119,6 +119,9 @@ jobs:
     runs-on: ubuntu-24.04
     container: node:22.22.2-alpine3.23@sha256:8ea2348b068a9544dae7317b4f3aafcdc032df1647bb7d768a05a5cad1a7683f
     steps:
+      - name: Install Git before checking out the pinned release
+        if: inputs.overlay_sha != ''
+        run: apk add --no-cache git python3
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -127,7 +130,7 @@ jobs:
           ref: ${{ inputs.upstream_sha || github.sha }}
       - name: Apply the French-dub PR overlay
         if: inputs.overlay_sha != ''
-        uses: libussa/seerr/.github/actions/apply-french-dub@0c6c9f83407e09e7fa38ca3c9c83a26b698dfd11
+        uses: libussa/seerr/.github/actions/apply-french-dub@f27f43d0552942ba9083e8fecb2a251142c5716f
         with:
           overlay-sha: ${{ inputs.overlay_sha }}
 
@@ -170,6 +173,9 @@ jobs:
     permissions:
       checks: write
     steps:
+      - name: Install Git before checking out the pinned release
+        if: inputs.overlay_sha != ''
+        run: apk add --no-cache git python3
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -178,7 +184,7 @@ jobs:
           ref: ${{ inputs.upstream_sha || github.sha }}
       - name: Apply the French-dub PR overlay
         if: inputs.overlay_sha != ''
-        uses: libussa/seerr/.github/actions/apply-french-dub@0c6c9f83407e09e7fa38ca3c9c83a26b698dfd11
+        uses: libussa/seerr/.github/actions/apply-french-dub@f27f43d0552942ba9083e8fecb2a251142c5716f
         with:
           overlay-sha: ${{ inputs.overlay_sha }}
 
