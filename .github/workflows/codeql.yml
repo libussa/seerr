@@ -61,7 +61,7 @@ jobs:
           ref: ${{ inputs.upstream_sha || github.sha }}
       - name: Apply the French-dub PR overlay
         if: inputs.overlay_sha != ''
-        uses: libussa/seerr/.github/actions/apply-french-dub@f27f43d0552942ba9083e8fecb2a251142c5716f
+        uses: libussa/seerr/.github/actions/apply-french-dub@29a4aa7f95783874ea1440bbe131c65311a41011
         with:
           overlay-sha: ${{ inputs.overlay_sha }}
 
