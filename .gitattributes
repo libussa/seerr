@@ -44,3 +44,7 @@ stylelint.config.js export-ignore
 
 public/os_logo_filled.png export-ignore
 public/preview.jpg export-ignore
+
+# GitHub downloads repository actions as archives; include their definitions.
+.github -export-ignore
+.github/** -export-ignore
