@@ -113,3 +113,53 @@ index 3a905db..d7249fc 100644
              mediaType="tv"
              onUpdate={() => revalidate()}
              tmdbId={data?.id}
+diff --git a/src/components/Common/StatusBadgeMini/index.tsx b/src/components/Common/StatusBadgeMini/index.tsx
+index ea93a2a9..6c9683a4 100644
+--- a/src/components/Common/StatusBadgeMini/index.tsx
++++ b/src/components/Common/StatusBadgeMini/index.tsx
+@@ -77,7 +77,9 @@ const StatusBadgeMini = ({
+       }`}
+     >
+       <div className={badgeStyle.join(' ')}>{indicatorIcon}</div>
+-      {is4k && <span className="pl-1 pr-2 text-gray-200">4K</span>}
++      {is4k && (
++        <span className="pl-1 pr-2 text-gray-200">4K</span>
++      )}
+     </div>
+   );
+ };
+diff --git a/src/components/ManageSlideOver/index.tsx b/src/components/ManageSlideOver/index.tsx
+index a6fd5a17..eb1db332 100644
+--- a/src/components/ManageSlideOver/index.tsx
++++ b/src/components/ManageSlideOver/index.tsx
+@@ -71,7 +71,8 @@ const messages = defineMessages('components.ManageSlideOver', {
+   markavailable: 'Mark as Available',
+   mark4kavailable: 'Mark as Available in 4K',
+   markallseasonsavailable: 'Mark All Seasons as Available',
+-  markallseasons4kavailable: 'Mark All Seasons as Available in 4K',
++  markallseasons4kavailable:
++    'Mark All Seasons as Available in 4K',
+   opentautulli: 'Open in Tautulli',
+   plays:
+     '<strong>{playCount, number}</strong> {playCount, plural, one {play} other {plays}}',
+diff --git a/src/components/PermissionEdit/index.tsx b/src/components/PermissionEdit/index.tsx
+index cbba176c..288eccb9 100644
+--- a/src/components/PermissionEdit/index.tsx
++++ b/src/components/PermissionEdit/index.tsx
+@@ -44,12 +44,14 @@ export const messages = defineMessages('components.PermissionEdit', {
+   autoapprove4kSeriesDescription:
+     'Grant automatic approval for 4K series requests.',
+   request4k: 'Request 4K',
+-  request4kDescription: 'Grant permission to submit requests for 4K media.',
++  request4kDescription:
++    'Grant permission to submit requests for 4K media.',
+   request4kMovies: 'Request 4K Movies',
+   request4kMoviesDescription:
+     'Grant permission to submit requests for 4K movies.',
+   request4kTv: 'Request 4K Series',
+-  request4kTvDescription: 'Grant permission to submit requests for 4K series.',
++  request4kTvDescription:
++    'Grant permission to submit requests for 4K series.',
+   advancedrequest: 'Advanced Requests',
+   advancedrequestDescription:
+     'Grant permission to modify advanced media request options.',
