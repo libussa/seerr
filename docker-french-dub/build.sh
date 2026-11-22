@@ -19,8 +19,11 @@ if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   exit 1
 fi
 image_tag=${1:-seerr-french-dub:$version}
-git -C "$build_dir" apply --check "$overlay_dir/french-original-ui.patch"
-git -C "$build_dir" apply "$overlay_dir/french-original-ui.patch"
+# Apply every overlay patch in name order (french-original-ui, then jellyfin-…).
+for patch in "$overlay_dir"/*.patch; do
+  git -C "$build_dir" apply --check "$patch"
+  git -C "$build_dir" apply "$patch"
+done
 python3 "$overlay_dir/relabel.py" "$build_dir"
 source_epoch=$(git -C "$build_dir" show -s --format=%ct HEAD)
 docker buildx build --load --progress=plain \

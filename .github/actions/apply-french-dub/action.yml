@@ -50,9 +50,10 @@ runs:
             if (overlay / 'upstream-ref').read_text().strip() != upstream:
                 print(f'::error::Checked out {upstream}, but PR pins {(overlay / "upstream-ref").read_text().strip()}', flush=True)
                 raise SystemExit('Checked-out upstream does not match the PR pin')
-            patch = str(overlay / 'french-original-ui.patch')
-            command(*source_git, 'apply', '--check', patch)
-            command(*source_git, 'apply', patch)
+            # Apply every overlay patch in name order, as build.sh does.
+            for patch in sorted(str(p) for p in overlay.glob('*.patch')):
+                command(*source_git, 'apply', '--check', patch)
+                command(*source_git, 'apply', patch)
             subprocess.run(['python3', str(overlay / 'relabel.py'), os.getcwd()], check=True)
             print(command(*source_git, 'diff', '--stat'))
         PY
