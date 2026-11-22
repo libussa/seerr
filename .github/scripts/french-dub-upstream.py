@@ -15,7 +15,7 @@ UPSTREAM = "seerr-team/seerr"
 BASE = "codex/french-dub-labels"
 PIN = "docker-french-dub/upstream-ref"
 STATUS = "seerr/french-dub-build"
-VALIDATION_STATUSES = (STATUS, "seerr/upstream-ci", "seerr/upstream-cypress", "seerr/upstream-codeql")
+VALIDATION_STATUSES = (STATUS, "seerr/upstream-ci", "seerr/upstream-codeql")
 
 
 def with_upstream_comparison(body, previous, target):
@@ -135,9 +135,9 @@ def main():
             f"Release notes: {release['html_url']}\n\n"
             f"Upstream commit: `{upstream}`\n\n"
             "The release checker builds the custom image without publishing it and reports "
-            f"the result as **{STATUS}** on this PR. The fork's upstream CI, Cypress, and CodeQL "
+            f"the result as **{STATUS}** on this PR. The fork's upstream CI and CodeQL "
             "workflows also run against the pinned upstream source with the overlay applied. "
-            "Their results appear as **seerr/upstream-ci**, **seerr/upstream-cypress**, and "
+            "Their results appear as **seerr/upstream-ci** and "
             "**seerr/upstream-codeql**. If the overlay no longer applies, "
             "the build fails and the patch needs updating before merge.\n\n"
             f"Merging into `{BASE}` triggers the existing image publisher, including `latest`. "
