@@ -23,7 +23,7 @@ git -C "$build_dir" apply --check "$overlay_dir/french-original-ui.patch"
 git -C "$build_dir" apply "$overlay_dir/french-original-ui.patch"
 python3 "$overlay_dir/relabel.py" "$build_dir"
 source_epoch=$(git -C "$build_dir" show -s --format=%ct HEAD)
-docker build --progress=plain \
+docker buildx build --load --progress=plain \
   --build-arg "COMMIT_TAG=$upstream_ref" \
   --build-arg "SOURCE_DATE_EPOCH=$source_epoch" \
   --label "org.opencontainers.image.revision=$upstream_ref" \
