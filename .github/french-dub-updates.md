@@ -13,6 +13,20 @@ and proposed upstream commits, including all upstream changes in the new image.
 There is one branch/PR per version. Repeated checks do not create duplicates,
 overwrite contributor edits, downgrade the pin, or reopen a declined PR.
 
+The overlay is every `docker-french-dub/*.patch`, applied in name order to the
+pinned upstream, followed by `relabel.py`:
+
+- `french-original-ui.patch` – French-dub display changes.
+- `jellyfin-quickconnect-only.patch` – when the media server is Jellyfin (not
+  Emby), the login page drops the username/password form in favour of Quick
+  Connect, and Quick Connect dialogs link to `<Jellyfin external URL>/web/#/quickconnect`.
+  The URL comes from the instance's Jellyfin *External URL* setting; no host is
+  stored in this repository.
+
+If a release PR fails because a patch no longer applies, check out the new
+upstream SHA, `git apply --3way` the patch, resolve, and replace the patch with
+`git diff` of the result.
+
 The workflow builds the proposed image without registry credentials or publishing
 it, and attaches the `seerr/french-dub-build` commit status to the PR. It also calls
 the existing upstream `ci.yml`, `cypress.yml`, and `codeql.yml` as reusable

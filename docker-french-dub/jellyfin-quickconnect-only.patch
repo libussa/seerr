@@ -1,0 +1,176 @@
+diff --git a/src/components/Common/QuickConnectModal/index.tsx b/src/components/Common/QuickConnectModal/index.tsx
+index b81a338..93da88a 100644
+--- a/src/components/Common/QuickConnectModal/index.tsx
++++ b/src/components/Common/QuickConnectModal/index.tsx
+@@ -12,6 +12,7 @@ const messages = defineMessages('components.Common.QuickConnectModal', {
+   expiredMessage: 'This Quick Connect code has expired. Please try again.',
+   error: 'Error',
+   tryAgain: 'Try Again',
++  openInBrowser: 'or in the browser <link>here</link>',
+ });
+ 
+ interface QuickConnectModalProps {
+@@ -20,6 +21,7 @@ interface QuickConnectModalProps {
+   subTitle: string;
+   cancelText: string;
+   instructionsMessage: string;
++  browserUrl?: string;
+   dialogClass?: string;
+   showInlineError?: boolean;
+   onCancel: () => void;
+@@ -34,6 +36,7 @@ const QuickConnectModal = ({
+   subTitle,
+   cancelText,
+   instructionsMessage,
++  browserUrl,
+   dialogClass,
+   showInlineError,
+   onCancel,
+@@ -102,7 +105,26 @@ const QuickConnectModal = ({
+ 
+         {!isLoading && !hasError && !isExpired && (
+           <div className="flex flex-col items-center space-y-4">
+-            <p className="text-center text-gray-300">{instructionsMessage}</p>
++            <p className="text-center text-gray-300">
++              {instructionsMessage}
++              {browserUrl && (
++                <>
++                  {' '}
++                  {intl.formatMessage(messages.openInBrowser, {
++                    link: (chunks: React.ReactNode) => (
++                      <a
++                        href={browserUrl}
++                        target="_blank"
++                        rel="noreferrer"
++                        className="text-indigo-500 hover:text-indigo-400"
++                      >
++                        {chunks}
++                      </a>
++                    ),
++                  })}
++                </>
++              )}
++            </p>
+ 
+             <div className="flex flex-col items-center space-y-2">
+               <div className="rounded-lg bg-gray-700 px-8 py-4">
+diff --git a/src/components/Login/JellyfinLogin.tsx b/src/components/Login/JellyfinLogin.tsx
+index e60c6af..60bacc3 100644
+--- a/src/components/Login/JellyfinLogin.tsx
++++ b/src/components/Login/JellyfinLogin.tsx
+@@ -77,6 +77,12 @@ const JellyfinLogin = ({ revalidate, serverType }: JellyfinLoginProps) => {
+     : settings.currentSettings.jellyfinHost;
+   const jellyfinForgotPasswordUrl =
+     settings.currentSettings.jellyfinForgotPasswordUrl;
++  // Fork: Jellyfin sign-in is Quick Connect only (password logins are
++  // intercepted by the server's 2FA plugin). Emby keeps the password form.
++  const quickConnectOnly = serverType === MediaServerType.JELLYFIN;
++  const quickConnectBrowserUrl = baseUrl
++    ? `${baseUrl.replace(/\/+$/, '')}/web/#/quickconnect`
++    : undefined;
+ 
+   return (
+     <div>
+@@ -124,6 +130,15 @@ const JellyfinLogin = ({ revalidate, serverType }: JellyfinLoginProps) => {
+         }}
+       >
+         {({ errors, touched, values, isSubmitting, isValid }) => {
++          if (quickConnectOnly) {
++            return (
++              <h2 className="-mt-1 mb-6 text-center text-lg font-bold text-neutral-200">
++                {intl.formatMessage(messages.loginwithapp, {
++                  appName: mediaServerFormatValues.mediaServerName,
++                })}
++              </h2>
++            );
++          }
+           return (
+             <>
+               <Form data-form-type="login">
+@@ -219,9 +234,9 @@ const JellyfinLogin = ({ revalidate, serverType }: JellyfinLoginProps) => {
+       </Formik>
+ 
+       {serverType === MediaServerType.JELLYFIN && (
+-        <div className="mt-4">
++        <div className={quickConnectOnly ? undefined : 'mt-4'}>
+           <Button
+-            buttonType="ghost"
++            buttonType={quickConnectOnly ? 'primary' : 'ghost'}
+             type="button"
+             onClick={() => setShowQuickConnect(true)}
+             className="w-full"
+@@ -241,6 +256,7 @@ const JellyfinLogin = ({ revalidate, serverType }: JellyfinLoginProps) => {
+           }}
+           onError={handleQuickConnectError}
+           mediaServerName={mediaServerFormatValues.mediaServerName}
++          browserUrl={quickConnectBrowserUrl}
+         />
+       )}
+     </div>
+diff --git a/src/components/Login/JellyfinQuickConnectModal.tsx b/src/components/Login/JellyfinQuickConnectModal.tsx
+index 54298d2..2962583 100644
+--- a/src/components/Login/JellyfinQuickConnectModal.tsx
++++ b/src/components/Login/JellyfinQuickConnectModal.tsx
+@@ -16,6 +16,7 @@ interface JellyfinQuickConnectModalProps {
+   onAuthenticated: () => void;
+   onError: (error: string) => void;
+   mediaServerName: string;
++  browserUrl?: string;
+ }
+ 
+ const JellyfinQuickConnectModal = ({
+@@ -23,6 +24,7 @@ const JellyfinQuickConnectModal = ({
+   onAuthenticated,
+   onError,
+   mediaServerName,
++  browserUrl,
+ }: JellyfinQuickConnectModalProps) => {
+   const intl = useIntl();
+ 
+@@ -41,6 +43,7 @@ const JellyfinQuickConnectModal = ({
+       instructionsMessage={intl.formatMessage(messages.instructions, {
+         mediaServerName,
+       })}
++      browserUrl={browserUrl}
+       onCancel={onClose}
+       onSuccess={() => {
+         onAuthenticated();
+diff --git a/src/components/UserProfile/UserSettings/UserLinkedAccountsSettings/LinkJellyfinQuickConnectModal.tsx b/src/components/UserProfile/UserSettings/UserLinkedAccountsSettings/LinkJellyfinQuickConnectModal.tsx
+index c253b21..f9a6aa3 100644
+--- a/src/components/UserProfile/UserSettings/UserLinkedAccountsSettings/LinkJellyfinQuickConnectModal.tsx
++++ b/src/components/UserProfile/UserSettings/UserLinkedAccountsSettings/LinkJellyfinQuickConnectModal.tsx
+@@ -38,6 +38,14 @@ const LinkJellyfinQuickConnectModal = ({
+     settings.currentSettings.mediaServerType === MediaServerType.JELLYFIN
+       ? 'Jellyfin'
+       : 'Emby';
++  const jellyfinBaseUrl =
++    settings.currentSettings.jellyfinExternalHost ||
++    settings.currentSettings.jellyfinHost;
++  const browserUrl =
++    settings.currentSettings.mediaServerType === MediaServerType.JELLYFIN &&
++    jellyfinBaseUrl
++      ? `${jellyfinBaseUrl.replace(/\/+$/, '')}/web/#/quickconnect`
++      : undefined;
+ 
+   const authenticate = useCallback(
+     async (secret: string) => {
+@@ -63,6 +71,7 @@ const LinkJellyfinQuickConnectModal = ({
+       instructionsMessage={intl.formatMessage(messages.instructions, {
+         mediaServerName,
+       })}
++      browserUrl={browserUrl}
+       dialogClass="sm:max-w-lg"
+       showInlineError
+       onCancel={handleCancel}
+diff --git a/src/i18n/locale/en.json b/src/i18n/locale/en.json
+index 4a1a0ee..2749f55 100644
+--- a/src/i18n/locale/en.json
++++ b/src/i18n/locale/en.json
+@@ -24,6 +24,7 @@
+   "components.Common.QuickConnectModal.error": "Error",
+   "components.Common.QuickConnectModal.expired": "Code Expired",
+   "components.Common.QuickConnectModal.expiredMessage": "This Quick Connect code has expired. Please try again.",
++  "components.Common.QuickConnectModal.openInBrowser": "or in the browser <link>here</link>",
+   "components.Common.QuickConnectModal.tryAgain": "Try Again",
+   "components.Common.QuickConnectModal.waitingForAuth": "Waiting for authorization...",
+   "components.Discover.CreateSlider.addSlider": "Add Slider",
