@@ -1,0 +1,76 @@
+name: French-dub overlay PR
+
+# Validates hand-made PRs against the custom branch the same way the
+# release-bump workflow validates its own PRs: build the image (no publish)
+# and run upstream CI and CodeQL on the pinned upstream with this PR's overlay.
+# (Bot-created release PRs don't trigger pull_request workflows; they are
+# validated by french-dub-upstream.yml.)
+
+on:
+  pull_request:
+    branches: [codex/french-dub-labels]
+
+permissions: {}
+
+concurrency:
+  group: french-dub-overlay-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pin:
+    if: github.repository == 'libussa/seerr'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      upstream_sha: ${{ steps.pin.outputs.upstream_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - id: pin
+        run: |
+          sha=$(tr -d '\n' < docker-french-dub/upstream-ref)
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "Bad upstream-ref: $sha" >&2; exit 1; }
+          echo "upstream_sha=$sha" >> "$GITHUB_OUTPUT"
+
+  image-build:
+    needs: pin
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+      - name: Build the pinned upstream with the overlay (not published)
+        run: ./docker-french-dub/build.sh "seerr-french-dub:pr-${{ github.event.pull_request.head.sha }}"
+
+  upstream-ci:
+    needs: pin
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/ci.yml
+    with:
+      upstream_sha: ${{ needs.pin.outputs.upstream_sha }}
+      overlay_sha: ${{ github.event.pull_request.head.sha }}
+      overlay_ref: refs/heads/${{ github.head_ref }}
+
+  upstream-codeql:
+    needs: pin
+    permissions:
+      contents: read
+      security-events: write
+    uses: ./.github/workflows/codeql.yml
+    with:
+      upstream_sha: ${{ needs.pin.outputs.upstream_sha }}
+      overlay_sha: ${{ github.event.pull_request.head.sha }}
+      overlay_ref: refs/heads/${{ github.head_ref }}
